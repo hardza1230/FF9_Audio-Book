@@ -1,0 +1,59 @@
+name: Gemini Assistant
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  gemini_assistant:
+    if: startsWith(github.event.comment.body, '/gemini')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Google GenAI & PyGithub
+        run: |
+          pip install google-genai PyGithub
+
+      - name: Run Gemini Agent
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          REPO_NAME: ${{ github.repository }}
+        run: |
+          python - << 'EOF'
+          import os
+          from github import Github
+          from google import genai
+
+          token = os.environ['GITHUB_TOKEN']
+          issue_num = int(os.environ['ISSUE_NUMBER'])
+          comment = os.environ['COMMENT_BODY']
+          repo_name = os.environ['REPO_NAME']
+
+          user_prompt = comment.replace('/gemini', '', 1).strip()
+
+          client = genai.Client(api_key=os.environ['GEMINI_API_KEY'])
+          response = client.models.generate_content(
+              model="gemini-2.5-flash",
+              contents=f"คุณคือ AI ผู้ช่วยพัฒนาโปรเจกต์ 'FF9 Audio-Book' บน GitHub โปรดตอบคำถามหรือให้โค้ดตามคำขอนี้:\n\n{user_prompt}"
+          )
+
+          gh = Github(token)
+          repo = gh.get_repo(repo_name)
+          issue = repo.get_issue(number=issue_num)
+          issue.create_comment(f"### 🤖 Gemini Response:\n\n{response.text}")
+          EOF
+          
