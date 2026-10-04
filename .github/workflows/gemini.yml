@@ -61,6 +61,13 @@ jobs:
                   raw_text = data['candidates'][0]['content']['parts'][0]['text']
                   parsed = json.loads(raw_text)
                   reply_text = parsed.get("reply", "")
+
+                  # ดึงข้อมูล Token Usage จาก API
+                  usage = data.get("usageMetadata", {})
+                  prompt_tokens = usage.get("promptTokenCount", 0)
+                  candidates_tokens = usage.get("candidatesTokenCount", 0)
+                  total_tokens = usage.get("totalTokenCount", 0)
+
                   for f in parsed.get("files", []):
                       p = f.get("path")
                       if p:
@@ -79,6 +86,16 @@ jobs:
                           subprocess.run(["git", "commit", "-m", f"Auto-create files via Issue #{issue_num}"], check=True)
                           subprocess.run(["git", "push"], check=True)
                           reply_text += "\n\n---\n📁 **สร้างและ Push ไฟล์สำเร็จ:**\n" + "\n".join([f"- `{x}`" for x in created_files])
+
+                  # แนบรายงานสรุป Token ท้ายข้อความ
+                  reply_text += (
+                      f"\n\n---\n"
+                      f"📊 **สรุปการใช้ Token รอบนี้:**\n"
+                      f"- **Input Tokens (คำสั่ง + บริบท):** `{prompt_tokens}`\n"
+                      f"- **Output Tokens (เนื้อหาที่บอทตอบ/โค้ด):** `{candidates_tokens}`\n"
+                      f"- **Total Tokens รวม:** `{total_tokens}`"
+                  )
+
               except Exception as e:
                   reply_text = f"เกิดข้อผิดพลาดในการประมวลผลไฟล์: {e}"
           else:
