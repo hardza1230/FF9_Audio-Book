@@ -1,4 +1,4 @@
-name: Gemini Assistant & YouTube Audio Script
+name: Gemini Assistant & Auto Commit
 on:
   issue_comment:
     types: [created]
@@ -21,9 +21,8 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install Dependencies
-        run: |
-          pip install requests youtube-transcript-api
+      - name: Install Requests
+        run: pip install requests
 
       - name: Run Script
         env:
@@ -34,8 +33,7 @@ jobs:
           REPO_NAME: ${{ github.repository }}
         run: |
           cat << 'PYEOF' > run_agent.py
-          import os, re, json, requests, subprocess
-          from youtube_transcript_api import YouTubeTranscriptApi
+          import os, json, requests, subprocess, re
 
           gemini_key = os.environ.get('GEMINI_API_KEY', '').strip()
           github_token = os.environ.get('GITHUB_TOKEN', '').strip()
@@ -44,58 +42,13 @@ jobs:
           repo_name = os.environ.get('REPO_NAME')
 
           user_prompt = comment.replace('/gemini', '', 1).strip()
-
-          # ฟังก์ชันดึง Video ID จากลิงก์ YouTube
-          def get_yt_video_id(text):
-              patterns = [
-                  r'(?:v=|\/)([0-9A-Za-z_-]{11}).*',
-                  r'youtu\.be\/([0-9A-Za-z_-]{11})'
-              ]
-              for p in patterns:
-                  match = re.search(p, text)
-                  if match:
-                      return match.group(1)
-              return None
-
-          video_id = get_yt_video_id(user_prompt)
-          transcript_context = ""
-
-          # หากพบคลิป YouTube ให้ดึงบทพูดพร้อมเวลา
-          if video_id:
-              try:
-                  try:
-                      transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-                      transcript = transcript_list.find_transcript(['th', 'en', 'ja'])
-                      raw_transcript = transcript.fetch()
-                  except Exception:
-                      raw_transcript = YouTubeTranscriptApi.get_transcript(video_id)
-
-                  lines = []
-                  for item in raw_transcript:
-                      m, s = divmod(int(item['start']), 60)
-                      lines.append(f"[{m:02d}:{s:02d}] {item['text']}")
-                  transcript_context = "\n".join(lines)
-              except Exception as yt_err:
-                  transcript_context = f"[ไม่สามารถดึง Transcript จากคลิปได้: {yt_err}]"
-
-          # ประกอบ Prompt
-          final_prompt = user_prompt
-          if transcript_context:
-              final_prompt += (
-                  f"\n\n--- ข้อมูลบทพูดและลำดับเวลาจากคลิป YouTube ---\n"
-                  f"{transcript_context}\n"
-                  f"--------------------------------------------------\n"
-                  f"คำสั่งบังคับ: โปรดเรียงลำดับบทพูดตามไทม์ไลน์เวลาข้างต้น ห้ามสลับเหตุการณ์ "
-                  f"และจัดกลุ่มผู้พูด (เช่น Zidane, Steiner, Garnet, Narrator) ให้ถูกต้อง"
-              )
-
           system_instruction = (
-              "คุณคือ AI ผู้ช่วยพัฒนาโปรเจกต์ 'FF9 Audio-Book' บน GitHub\n"
-              "ตอบกลับในรูปแบบ JSON เท่านั้น:\n"
+              "คุณคือ AI ผู้ช่วยสร้าง FF9 Audio-Book\n"
+              "ตอบกลับในรูปแบบ JSON เท่านั้น โดยต้องครอบ String ทั้งหมดด้วยเครื่องหมาย double-quote เสมอ:\n"
               "{\n"
-              '  "reply": "ข้อความอธิบายภาษาไทย",\n'
+              '  "reply": "ข้อความอธิบายสรุปสั้นๆ ภาษาไทย",\n'
               '  "files": [\n'
-              '    {"path": "โฟลเดอร์/ชื่อไฟล์.นามสกุล", "content": "เนื้อหาของไฟล์"}\n'
+              '    {"path": "โฟลเดอร์/ชื่อไฟล์.json", "content": "เนื้อหาของไฟล์"}\n'
               "  ]\n"
               "}"
           )
@@ -103,8 +56,12 @@ jobs:
           url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={gemini_key}"
           payload = {
               "system_instruction": {"parts": [{"text": system_instruction}]},
-              "contents": [{"parts": [{"text": final_prompt}]}],
-              "generationConfig": {"response_mime_type": "application/json"}
+              "contents": [{"parts": [{"text": user_prompt}]}],
+              "generationConfig": {
+                  "response_mime_type": "application/json",
+                  "maxOutputTokens": 8192,
+                  "temperature": 0.2
+              }
           }
 
           res = requests.post(url, headers={"Content-Type": "application/json"}, json=payload)
@@ -114,42 +71,48 @@ jobs:
           if res.status_code == 200:
               try:
                   data = res.json()
-                  raw_text = data['candidates'][0]['content']['parts'][0]['text']
-                  parsed = json.loads(raw_text)
-                  reply_text = parsed.get("reply", "")
+                  candidate = data['candidates'][0]
+                  raw_text = candidate['content']['parts'][0]['text']
+
+                  # ตรวจสอบว่าข้อความถูกตัดเพราะความยาวเกินหรือไม่
+                  finish_reason = candidate.get("finishReason", "")
+                  if finish_reason == "MAX_TOKENS":
+                      reply_text = "⚠️ คำตอบยาวเกินขีดจำกัดสูงสุดของโมเดล ทำให้ไฟล์ JSON ไม่สมบูรณ์ แนะนำให้แบ่งสั่งทีละองก์/ช่วงย่อยครับ"
+                  else:
+                      parsed = json.loads(raw_text)
+                      reply_text = parsed.get("reply", "")
+
+                      for f in parsed.get("files", []):
+                          p = f.get("path")
+                          if p:
+                              d = os.path.dirname(p)
+                              if d: os.makedirs(d, exist_ok=True)
+                              with open(p, "w", encoding="utf-8") as out:
+                                  out.write(f.get("content", ""))
+                              created_files.append(p)
+
+                      if created_files:
+                          subprocess.run(["git", "config", "user.name", "github-actions[bot]"], check=True)
+                          subprocess.run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], check=True)
+                          subprocess.run(["git", "add", "."], check=True)
+                          diff = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
+                          if diff.stdout.strip():
+                              subprocess.run(["git", "commit", "-m", f"Auto-create files via Issue #{issue_num}"], check=True)
+                              subprocess.run(["git", "push"], check=True)
+                              reply_text += "\n\n---\n📁 **สร้างและ Push ไฟล์สำเร็จ:**\n" + "\n".join([f"- `{x}`" for x in created_files])
 
                   usage = data.get("usageMetadata", {})
                   prompt_tokens = usage.get("promptTokenCount", 0)
                   candidates_tokens = usage.get("candidatesTokenCount", 0)
                   total_tokens = usage.get("totalTokenCount", 0)
 
-                  for f in parsed.get("files", []):
-                      p = f.get("path")
-                      if p:
-                          d = os.path.dirname(p)
-                          if d: os.makedirs(d, exist_ok=True)
-                          with open(p, "w", encoding="utf-8") as out:
-                              out.write(f.get("content", ""))
-                          created_files.append(p)
-
-                  if created_files:
-                      subprocess.run(["git", "config", "user.name", "github-actions[bot]"], check=True)
-                      subprocess.run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], check=True)
-                      subprocess.run(["git", "add", "."], check=True)
-                      diff = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
-                      if diff.stdout.strip():
-                          subprocess.run(["git", "commit", "-m", f"Auto-create files via Issue #{issue_num}"], check=True)
-                          subprocess.run(["git", "push"], check=True)
-                          reply_text += "\n\n---\n📁 **สร้างและ Push ไฟล์สำเร็จ:**\n" + "\n".join([f"- `{x}`" for x in created_files])
-
                   reply_text += (
                       f"\n\n---\n"
-                      f"📊 **สรุปการใช้ Token:**\n"
-                      f"- Input: `{prompt_tokens}` | Output: `{candidates_tokens}` | Total: `{total_tokens}`"
+                      f"📊 **สรุปการใช้ Token:** Input: `{prompt_tokens}` | Output: `{candidates_tokens}` | Total: `{total_tokens}`"
                   )
 
               except Exception as e:
-                  reply_text = f"เกิดข้อผิดพลาดในการประมวลผลไฟล์: {e}"
+                  reply_text = f"เกิดข้อผิดพลาดในการประมวลผล JSON: {e}\n(แนะนำให้ลองสั่งย่อยขอบเขตให้แคบลง เช่น แบ่งเป็นครึ่งแรกและครึ่งหลัง)"
           else:
               reply_text = f"API Error (HTTP {res.status_code}): {res.text}"
 
