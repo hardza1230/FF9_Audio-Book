@@ -1,0 +1,46 @@
+character_id: "zidane_tribal"
+name:
+  th: "ซีดาน ไทรบัล"
+  en: "Zidane Tribal"
+  jp: "ジタン・トライバル"
+
+profile:
+  role: "Protagonist"
+  race: "Genome"
+  gender: "Male"
+  age: 16
+  affiliation: "กลุ่มละครเร่และโจรแทนทาลัส (Tantalus Theater Troupe)"
+  weapon: "มีดสั้นคู่ / ดาบสองปลาย (Daggers / Thief Swords)"
+  origin: "สร้างขึ้นที่ Terra / เติบโตที่ Lindblum"
+
+personality:
+  summary: "เด็กหนุ่มมีหางลิง ร่าเริง อารมณ์ดี ฉลาดแกมโกงแต่มีคุณธรรมสูงส่ง เป็นศูนย์รวมจิตใจของกลุ่ม"
+  traits:
+    - "มองโลกในแง่ดีและมีพลังบวกเสมอ"
+    - "เจ้าชู้ ขี้เล่น ชอบหยอดคำหวานกับสาวๆ แต่จริงใจ"
+    - "รักพวกพ้องและเห็นอกเห็นใจผู้อื่นอย่างลึกซึ้ง"
+    - "มีความเป็นผู้นำสูง ตัดสินใจเด็ดขาดในยามคับขัน"
+
+philosophy:
+  virtue: "You don't need a reason to help people."
+  virtue_th: "เธอต้องการเหตุผลในการช่วยใครสักคนด้วยงั้นเหรอ?"
+
+catchphrases:
+  - "เธอต้องการเหตุผลในการช่วยใครสักคนด้วยเหรอ?"
+  - "เอาล่ะ ลุยกันเลยพวกเรา!"
+  - "ไม่ว่าจะเกิดอะไรขึ้น ฉันจะไม่ยอมแพ้เด็ดขาด!"
+  - "แม่หญิงคนสวย มีอะไรให้โจรคนนี้รับใช้ไหมครับ?"
+
+tts_config:
+  provider: "google_tts"
+  voice:
+    language_code: "th-TH"
+    name: "th-TH-Neural2-C"
+    ssml_gender: "MALE"
+  audio_profile:
+    speaking_rate: 1.05
+    pitch: 1.2
+    volume_gain_db: 0.0
+  tone_guide:
+    style: "วัยรุ่นชาย กระฉับกระเฉง ร่าเริง มีเสน่ห์ ขี้เล่น แต่นุ่มนวลและจริงจังเมื่อพูดเรื่องลึกซึ้ง"
+    ssml_emphasis_default: "moderate"
