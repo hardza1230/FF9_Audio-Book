@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>FF9 Music Player - A Place to Call Home</title>
+  <style>
+    body {
+      background: radial-gradient(circle at center, #1b2735 0%, #090a0f 100%);
+      color: #e0d7c6;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+    .card {
+      background: rgba(22, 33, 62, 0.85);
+      border: 2px solid #b89758;
+      border-radius: 12px;
+      padding: 30px 40px;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      max-width: 480px;
+    }
+    h1 {
+      color: #ffd700;
+      margin-bottom: 8px;
+      font-size: 1.6rem;
+    }
+    p {
+      color: #b0c4de;
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+    button {
+      background: linear-gradient(135deg, #b89758, #8c6d3b);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 12px 28px;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 15px;
+      transition: transform 0.1s ease, filter 0.2s;
+    }
+    button:hover {
+      filter: brightness(1.15);
+    }
+    button:active {
+      transform: scale(0.97);
+    }
+    .status {
+      margin-top: 15px;
+      font-style: italic;
+      color: #8fa3bf;
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Final Fantasy IX</h1>
+    <p>ธีมดนตรี: <em>A Place to Call Home (The Place I'll Return to Someday)</em></p>
+    <button id="playBtn" onclick="toggleMusic()">▶ เล่นเพลงบรรเลง</button>
+    <div class="status" id="statusText">กดปุ่มเพื่อเริ่มเล่นเสียงบรรเลง Flute Synth</div>
+  </div>
+
+  <script>
+    let audioCtx = null;
+    let isPlaying = false;
+    let noteTimer = null;
+
+    // ความถี่ของโน้ตดนตรี
+    const notes = {
+      'D4': 293.66, 'E4': 329.63, 'F4': 349.23, 'G4': 392.00, 
+      'A4': 440.00, 'Bb4': 466.16, 'C5': 523.25, 'D5': 587.33,
+      'E5': 659.25, 'F5': 698.46, 'REST': 0
+    };
+
+    // ทำนองหลัก FF9 Intro (recorder melody)
+    const score = [
+      { note: 'D4', dur: 0.5 }, { note: 'F4', dur: 0.5 }, { note: 'G4', dur: 0.5 },
+      { note: 'A4', dur: 1.0 }, { note: 'C5', dur: 0.5 }, { note: 'A4', dur: 1.5 },
+      { note: 'G4', dur: 0.5 }, { note: 'F4', dur: 0.5 }, { note: 'E4', dur: 0.5 },
+      { note: 'D4', dur: 1.5 }, { note: 'F4', dur: 0.5 }, { note: 'E4', dur: 1.0 },
+      { note: 'D4', dur: 1.0 }, { note: 'REST', dur: 0.5 },
+      { note: 'D4', dur: 0.5 }, { note: 'F4', dur: 0.5 }, { note: 'G4', dur: 0.5 },
+      { note: 'A4', dur: 1.0 }, { note: 'D5', dur: 0.5 }, { note: 'C5', dur: 1.5 },
+      { note: 'A4', dur: 0.5 }, { note: 'C5', dur: 0.5 }, { note: 'D5', dur: 0.5 },
+      { note: 'F5', dur: 1.0 }, { note: 'E5', dur: 0.5 }, { note: 'D5', dur: 2.0 }
+    ];
+
+    function playTone(freq, duration) {
+      if (!freq || freq === 0) return;
+      const osc = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      
+      // เลียนแบบเสียงเครื่องเป่าไม้อ่อนหวาน (Triangle / Sine blend)
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+      const now = audioCtx.currentTime;
+      gainNode.gain.setValueAtTime(0, now);
+      gainNode.gain.linearRampToValueAtTime(0.2, now + 0.08); // Attack
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + duration); // Decay
+
+      osc.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+
+      osc.start(now);
+      osc.stop(now + duration);
+    }
+
+    function playMelody(index = 0) {
+      if (!isPlaying) return;
+      if (index >= score.length) {
+        // วนลูปหลังเล่นจบ
+        noteTimer = setTimeout(() => playMelody(0), 1000);
+        return;
+      }
+
+      const item = score[index];
+      const durationMs = item.dur * 600;
+      playTone(notes[item.note], item.dur * 0.55);
+
+      noteTimer = setTimeout(() => {
+        playMelody(index + 1);
+      }, durationMs);
+    }
+
+    function toggleMusic() {
+      const btn = document.getElementById('playBtn');
+      const status = document.getElementById('statusText');
+
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+
+      if (!isPlaying) {
+        isPlaying = true;
+        btn.innerText = '⏹ หยุดเพลง';
+        status.innerText = 'กำลังบรรเลงทำนอง A Place to Call Home...';
+        playMelody(0);
+      } else {
+        isPlaying = false;
+        clearTimeout(noteTimer);
+        btn.innerText = '▶ เล่นเพลงบรรเลง';
+        status.innerText = 'หยุดเล่นแล้ว';
+      }
+    }
+  </script>
+</body>
+</html>
