@@ -46,8 +46,8 @@ jobs:
 
           user_prompt = comment.replace('/gemini', '', 1).strip()
 
-          # ใช้ v1 endpoint กับ gemini-2.5-flash
-          url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={gemini_key}"
+          # เปลี่ยนมาใช้โมเดล gemini-3.8-flash ตามคำแนะนำของ API
+          url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={gemini_key}"
           headers = {"Content-Type": "application/json"}
           payload = {
               "contents": [{
